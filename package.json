@@ -38,6 +38,7 @@
     "cmdk": "^1.1.1",
     "cra-template": "1.2.0",
     "date-fns": "^3.6.0",
+    "dotenv": "^17.3.1",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.34.0",
     "input-otp": "^1.4.2",
@@ -61,7 +62,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "craco build",
+    "build": "node scripts/generate-sitemap.js && craco build",
     "test": "craco test"
   },
   "browserslist": {
