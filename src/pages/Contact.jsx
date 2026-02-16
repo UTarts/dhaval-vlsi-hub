@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Mail, Send, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
+import SEO from "@/components/shared/SEO";
 
 export default function Contact() {
   const [formData, setFormData] = useState({
