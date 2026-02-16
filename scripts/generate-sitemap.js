@@ -1,17 +1,16 @@
 const fs = require('fs');
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config(); // Load environment variables from .env
+require('dotenv').config();
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-const SITE_URL = "https://dhavalshukla.com"; // Your real domain
+const SITE_URL = "https://dhavalshukla.com"; 
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function generateSitemap() {
   console.log("Generating sitemap...");
 
-  // 1. Define your static pages
   const staticPages = [
     "",
     "/about",
@@ -21,7 +20,6 @@ async function generateSitemap() {
     "/contact"
   ];
 
-  // 2. Fetch dynamic blog posts from Supabase
   const { data: posts, error } = await supabase
     .from('posts')
     .select('slug, updated_at')
@@ -32,17 +30,19 @@ async function generateSitemap() {
     process.exit(1);
   }
 
-  // 3. Build the XML string
   let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
 
   // Add Static Pages
   staticPages.forEach(page => {
+    // LOGIC CHANGE: If page is empty (Home), priority is 1.0, else 0.8
+    const priority = page === "" ? "1.0" : "0.8";
+    
     sitemap += `
   <url>
     <loc>${SITE_URL}${page}</loc>
     <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
+    <priority>${priority}</priority>
   </url>`;
   });
 
@@ -60,7 +60,6 @@ async function generateSitemap() {
   sitemap += `
 </urlset>`;
 
-  // 4. Write to the public folder
   fs.writeFileSync('./public/sitemap.xml', sitemap);
   console.log("✅ Sitemap generated at ./public/sitemap.xml");
 }
