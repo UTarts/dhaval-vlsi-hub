@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import emailjs from "@emailjs/browser";
 import SEO from "@/components/shared/SEO";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 // --- REMINDER: Ensure these are set for EmailJS to work ---
 const EMAILJS_SERVICE_ID = "YOUR_SERVICE_ID";   
@@ -17,7 +18,7 @@ export default function Contact() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  const [pageData, setPageData] = useState({
+  const { data: pageData } = useSiteSettings("contact_page", {
     social_links: [
       { platform: "LinkedIn", url: "https://linkedin.com", color: "bg-blue-600" },
       { platform: "GitHub", url: "https://github.com", color: "bg-gray-800" }

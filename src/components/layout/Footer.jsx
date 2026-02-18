@@ -1,9 +1,31 @@
 import { Link } from "react-router-dom";
-import { Cpu, Github, Linkedin, Twitter, Youtube, Lock, LockOpen, ExternalLink } from "lucide-react";
+import { Cpu, Linkedin, Github, Twitter, Youtube, Facebook, Instagram, Mail, Globe, Lock, LockOpen, ExternalLink } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
+
+// Map platform names to Lucide icons dynamically
+const iconMap = {
+  linkedin: Linkedin,
+  github: Github,
+  twitter: Twitter,
+  youtube: Youtube,
+  facebook: Facebook,
+  instagram: Instagram,
+  email: Mail,
+  website: Globe
+};
 
 export default function Footer() {
   const { user } = useAuth();
+  
+  // Use our new global cache to fetch the dynamic social links instantly
+  const { data: contactData } = useSiteSettings("contact_page", {
+    social_links: [
+      { platform: "LinkedIn", url: "https://linkedin.com" },
+      { platform: "GitHub", url: "https://github.com" },
+    ]
+  });
+
   return (
     <footer className="border-t border-gray-200 bg-white pb-24 md:pb-0" data-testid="footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -19,24 +41,26 @@ export default function Footer() {
               Physical Design Lead Engineer crafting AI chips at the nanometer scale.
               Sharing knowledge on VLSI, EDA tools, and engineering careers.
             </p>
+            
+            {/* Dynamic Centralized Social Links */}
             <div className="flex gap-3 mt-4">
-              {[
-                { icon: Linkedin, href: "#", label: "LinkedIn" },
-                { icon: Github, href: "#", label: "GitHub" },
-                { icon: Twitter, href: "#", label: "Twitter" },
-                { icon: Youtube, href: "#", label: "YouTube" },
-              ].map((social) => (
-                <a
-                  key={social.label}
-                  href={social.href}
-                  data-testid={`footer-social-${social.label.toLowerCase()}`}
-                  className="p-2 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 rounded-lg"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <social.icon size={16} />
-                </a>
-              ))}
+              {(contactData.social_links || []).map((social) => {
+                const platformKey = social.platform.toLowerCase();
+                const IconComponent = iconMap[platformKey] || ExternalLink;
+                
+                return (
+                  <a
+                    key={social.platform}
+                    href={social.url}
+                    className="p-2 border border-gray-200 text-gray-600 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 rounded-lg"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={social.platform}
+                  >
+                    <IconComponent size={16} />
+                  </a>
+                );
+              })}
             </div>
           </div>
 
@@ -81,7 +105,7 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Updated Footer Bottom with Logo */}
+        {/* Footer Bottom */}
         <div className="mt-12 pt-6 border-t border-gray-200 flex flex-col md:flex-row justify-center items-center gap-6">
           <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 text-xs text-gray-500 font-mono text-center">
             <span>&copy; {new Date().getFullYear()} Dhaval Shukla. All rights reserved.</span>
@@ -108,18 +132,11 @@ export default function Footer() {
           <Link
             to={user ? "/admin" : "/admin/login"}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors font-mono group"
-            data-testid="footer-admin-link"
           >
             {user ? (
-              <>
-                <LockOpen size={14} className="group-hover:text-blue-600" />
-                <span>Admin</span>
-              </>
+              <><LockOpen size={14} className="group-hover:text-blue-600" /><span>Admin</span></>
             ) : (
-              <>
-                <Lock size={14} className="group-hover:text-blue-600" />
-                <span>Admin</span>
-              </>
+              <><Lock size={14} className="group-hover:text-blue-600" /><span>Admin</span></>
             )}
           </Link>
         </div>
