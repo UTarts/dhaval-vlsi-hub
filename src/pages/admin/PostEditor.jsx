@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, GripVertical, Image as ImageIcon, Code, Type, Heading2, Youtube, Save, Eye, LogOut, Upload, Loader2 } from "lucide-react";
+import { 
+  ArrowLeft, Plus, Trash2, GripVertical, Image as ImageIcon, 
+  Code, Type, Heading2, Youtube, Save, Eye, LogOut, Upload, Loader2, List as ListIcon, Code2 
+} from "lucide-react";
 import { motion, Reorder } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabaseClient";
@@ -21,7 +24,7 @@ export default function PostEditor() {
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false); // Track global upload state
+  const [uploading, setUploading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -38,20 +41,12 @@ export default function PostEditor() {
       navigate("/admin/login");
       return;
     }
-
-    if (isEdit) {
-      loadPost();
-    }
+    if (isEdit) loadPost();
   }, [user, navigate, isEdit, id]);
 
   const loadPost = async () => {
     try {
-      const { data, error } = await supabase
-        .from("posts")
-        .select("*")
-        .eq("id", id)
-        .single();
-
+      const { data, error } = await supabase.from("posts").select("*").eq("id", id).single();
       if (error) throw error;
       
       setTitle(data.title);
@@ -71,34 +66,20 @@ export default function PostEditor() {
     }
   };
 
-  // --- Image Upload Logic ---
   const handleImageUpload = async (file) => {
     if (!file) return null;
-
-    // Validate file type
     if (!file.type.startsWith("image/")) {
       alert("Please upload an image file (PNG, JPG, etc.)");
       return null;
     }
-
     setUploading(true);
     try {
-      // 1. Create a unique file name
       const fileExt = file.name.split(".").pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      // 2. Upload to Supabase 'images' bucket
-      const { error: uploadError } = await supabase.storage
-        .from("images")
-        .upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
       if (uploadError) throw uploadError;
-
-      // 3. Get the Public URL
-      const { data } = supabase.storage.from("images").getPublicUrl(filePath);
+      const { data } = supabase.storage.from("images").getPublicUrl(fileName);
       return data.publicUrl;
-
     } catch (error) {
       console.error("Upload failed:", error);
       alert("Failed to upload image: " + error.message);
@@ -123,7 +104,6 @@ export default function PostEditor() {
       if (url) updateBlock(index, "url", url);
     }
   };
-  // --------------------------
 
   const addBlock = (type) => {
     const newBlock = {
@@ -132,6 +112,7 @@ export default function PostEditor() {
       content: "",
       language: type === "code" ? "python" : "",
       level: type === "heading" ? 2 : 2,
+      listType: type === "list" ? "ul" : "", // ul = bullet, ol = numbered
       caption: "",
       url: "",
     };
@@ -148,21 +129,56 @@ export default function PostEditor() {
     setBlocks(blocks.filter((_, i) => i !== index));
   };
 
-  const createSlug = (text) => {
-    return text
-      .toString()
-      .toLowerCase()
-      .trim()
-      .replace(/[\s\W-]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+  // --- NEW: Handle Tab Key for 4 Spaces ---
+  const handleKeyDown = (e, index, field) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = e.target.selectionStart;
+      const end = e.target.selectionEnd;
+      const value = e.target.value;
+      const newValue = value.substring(0, start) + "    " + value.substring(end);
+      
+      updateBlock(index, field, newValue);
+      
+      // Move cursor right after the 4 inserted spaces
+      setTimeout(() => {
+        e.target.selectionStart = e.target.selectionEnd = start + 4;
+      }, 0);
+    }
   };
 
-  const handleSave = async (shouldPublish = published) => {
-    if (!title.trim()) {
-      alert("Title is required");
+  // --- NEW: Wrap selected text in inline code HTML ---
+  const formatInlineCode = (index, blockId) => {
+    const el = document.getElementById(`textarea-${blockId}`);
+    if (!el) return;
+    
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    if (start === end) {
+      alert("Please highlight/select some text first to format it.");
       return;
     }
 
+    const value = el.value;
+    const selectedText = value.substring(start, end);
+    // Injects Tailwind styling directly into the content so it renders beautifully
+    const codeWrapper = `<code class="bg-blue-50 text-blue-600 font-mono px-1.5 py-0.5 rounded text-sm border border-blue-100">${selectedText}</code>`;
+    const newValue = value.substring(0, start) + codeWrapper + value.substring(end);
+    
+    updateBlock(index, "content", newValue);
+    
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + codeWrapper.length, start + codeWrapper.length);
+    }, 0);
+  };
+
+  const createSlug = (text) => {
+    return text.toString().toLowerCase().trim().replace(/[\s\W-]+/g, "-").replace(/^-+|-+$/g, "");
+  };
+
+  const handleSave = async (shouldPublish = published) => {
+    if (!title.trim()) { alert("Title is required"); return; }
     setSaving(true);
     try {
       const textContent = blocks.map(b => b.content).join(" ");
@@ -170,33 +186,20 @@ export default function PostEditor() {
       const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
       const postData = {
-        title,
-        excerpt,
-        category,
+        title, excerpt, category,
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
         featured_image: featuredImage,
-        published: shouldPublish,
-        featured,
+        published: shouldPublish, featured,
         content: blocks.map(({ id, ...rest }) => rest),
         reading_time: readingTime,
         updated_at: new Date().toISOString(),
       };
 
-      if (!isEdit) {
-        postData.slug = createSlug(title) + "-" + Date.now().toString().slice(-4);
-      }
+      if (!isEdit) postData.slug = createSlug(title) + "-" + Date.now().toString().slice(-4);
 
-      let result;
-      if (isEdit) {
-        result = await supabase
-          .from("posts")
-          .update(postData)
-          .eq("id", id);
-      } else {
-        result = await supabase
-          .from("posts")
-          .insert([postData]);
-      }
+      let result = isEdit 
+        ? await supabase.from("posts").update(postData).eq("id", id)
+        : await supabase.from("posts").insert([postData]);
 
       if (result.error) throw result.error;
 
@@ -210,10 +213,7 @@ export default function PostEditor() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate("/admin/login");
-  };
+  const handleLogout = () => { logout(); navigate("/admin/login"); };
 
   if (loading) {
     return (
@@ -227,17 +227,12 @@ export default function PostEditor() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
-      {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 pb-20">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              <Link
-                to="/admin/posts"
-                className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
-                data-testid="back-to-posts"
-              >
+              <Link to="/admin/posts" className="p-2 text-gray-600 hover:text-blue-600 transition-colors">
                 <ArrowLeft size={20} />
               </Link>
               <h1 className="text-xl font-heading font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -245,23 +240,12 @@ export default function PostEditor() {
               </h1>
             </div>
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowPreview(!showPreview)}
-                className="hidden md:flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-blue-600 transition-colors font-semibold"
-                data-testid="toggle-preview"
-              >
-                <Eye size={16} />
-                {showPreview ? "Edit" : "Preview"}
+              <button onClick={() => setShowPreview(!showPreview)} className="hidden md:flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-blue-600 transition-colors font-semibold">
+                <Eye size={16} /> {showPreview ? "Edit" : "Preview"}
               </button>
-              <span className="hidden sm:inline text-sm text-gray-600 font-mono">
-                {user?.email}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-red-600 transition-colors font-semibold"
-              >
-                <LogOut size={16} />
-                <span className="hidden sm:inline">Logout</span>
+              <span className="hidden sm:inline text-sm text-gray-600 font-mono">{user?.email}</span>
+              <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-red-600 transition-colors font-semibold">
+                <LogOut size={16} /> <span className="hidden sm:inline">Logout</span>
               </button>
             </div>
           </div>
@@ -270,50 +254,25 @@ export default function PostEditor() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Editor */}
           <div className="lg:col-span-2 space-y-6">
             {!showPreview ? (
               <>
-                {/* Post Meta */}
                 <Card className="p-6 bg-white shadow-sm border border-gray-200">
                   <h2 className="text-lg font-heading font-bold text-gray-900 mb-4">Post Details</h2>
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor="title" className="text-sm font-semibold text-gray-700">
-                        Title *
-                      </Label>
-                      <Input
-                        id="title"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Enter post title..."
-                        className="mt-1"
-                        data-testid="post-title-input"
-                      />
+                      <Label className="text-sm font-semibold text-gray-700">Title *</Label>
+                      <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Enter post title..." className="mt-1" />
                     </div>
                     <div>
-                      <Label htmlFor="excerpt" className="text-sm font-semibold text-gray-700">
-                        Excerpt
-                      </Label>
-                      <Textarea
-                        id="excerpt"
-                        value={excerpt}
-                        onChange={(e) => setExcerpt(e.target.value)}
-                        placeholder="Brief description of the post..."
-                        rows={3}
-                        className="mt-1"
-                        data-testid="post-excerpt-input"
-                      />
+                      <Label className="text-sm font-semibold text-gray-700">Abstract</Label>
+                      <Textarea value={excerpt} onChange={(e) => setExcerpt(e.target.value)} placeholder="Brief description..." rows={3} className="mt-1" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="category" className="text-sm font-semibold text-gray-700">
-                          Category
-                        </Label>
+                        <Label className="text-sm font-semibold text-gray-700">Category</Label>
                         <Select value={category} onValueChange={setCategory}>
-                          <SelectTrigger className="mt-1" data-testid="post-category-select">
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="tutorial">Tutorial</SelectItem>
                             <SelectItem value="career">Career</SelectItem>
@@ -324,23 +283,12 @@ export default function PostEditor() {
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="tags" className="text-sm font-semibold text-gray-700">
-                          Tags (comma-separated)
-                        </Label>
-                        <Input
-                          id="tags"
-                          value={tags}
-                          onChange={(e) => setTags(e.target.value)}
-                          placeholder="VLSI, Physical Design, TCL"
-                          className="mt-1"
-                          data-testid="post-tags-input"
-                        />
+                        <Label className="text-sm font-semibold text-gray-700">Tags (comma-separated)</Label>
+                        <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="VLSI, Physical Design, TCL" className="mt-1" />
                       </div>
                     </div>
                     <div>
-                      <Label htmlFor="featured-image" className="text-sm font-semibold text-gray-700">
-                        Featured Image
-                      </Label>
+                      <Label className="text-sm font-semibold text-gray-700">Featured Image</Label>
                       <div className="mt-2 space-y-3">
                         <div className="flex items-center gap-4">
                           {featuredImage && (
@@ -349,186 +297,191 @@ export default function PostEditor() {
                             </div>
                           )}
                           <div className="flex-1">
-                            <Input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleFeaturedImageChange}
-                              disabled={uploading}
-                              className="cursor-pointer"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              {uploading ? "Uploading..." : "Upload a PNG or JPG file"}
-                            </p>
+                            <Input type="file" accept="image/*" onChange={handleFeaturedImageChange} disabled={uploading} className="cursor-pointer" />
                           </div>
                         </div>
-                        {/* Fallback URL input if they still want to paste */}
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-400 font-mono">OR</span>
-                            <Input
-                                value={featuredImage}
-                                onChange={(e) => setFeaturedImage(e.target.value)}
-                                placeholder="Paste image URL directly..."
-                                className="text-xs h-8"
-                            />
+                            <Input value={featuredImage} onChange={(e) => setFeaturedImage(e.target.value)} placeholder="Paste image URL directly..." className="text-xs h-8" />
                         </div>
                       </div>
                     </div>
                   </div>
                 </Card>
 
-                {/* Content Blocks */}
-                <Card className="p-6 bg-white shadow-sm border border-gray-200">
-                  <div className="flex items-center justify-between mb-4">
+                {/* Content Blocks Card */}
+                <Card className="bg-white shadow-sm border border-gray-200 overflow-visible relative">
+                  
+                  {/* --- NEW: Sticky Toolbar --- */}
+                  <div className="sticky top-16 z-40 bg-gray-50 border-b border-gray-200 p-4 flex items-center justify-between rounded-t-xl shadow-sm">
                     <h2 className="text-lg font-heading font-bold text-gray-900">Content Blocks</h2>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => addBlock("paragraph")} className="text-xs">
+                      <Button size="sm" variant="outline" onClick={() => addBlock("paragraph")} className="text-xs bg-white">
                         <Type size={14} className="mr-1" /> Para
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => addBlock("heading")} className="text-xs">
+                      <Button size="sm" variant="outline" onClick={() => addBlock("heading")} className="text-xs bg-white">
                         <Heading2 size={14} className="mr-1" /> H2
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => addBlock("code")} className="text-xs">
+                      <Button size="sm" variant="outline" onClick={() => addBlock("list")} className="text-xs bg-white">
+                        <ListIcon size={14} className="mr-1" /> List
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => addBlock("code")} className="text-xs bg-white">
                         <Code size={14} className="mr-1" /> Code
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => addBlock("image")} className="text-xs">
+                      <Button size="sm" variant="outline" onClick={() => addBlock("image")} className="text-xs bg-white">
                         <ImageIcon size={14} className="mr-1" /> Img
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => addBlock("youtube")} className="text-xs">
+                      <Button size="sm" variant="outline" onClick={() => addBlock("youtube")} className="text-xs bg-white">
                         <Youtube size={14} className="mr-1" /> Video
                       </Button>
                     </div>
                   </div>
 
-                  {blocks.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500 font-body">
-                      <p className="mb-4">No content blocks yet.</p>
-                      <Button onClick={() => addBlock("paragraph")} variant="outline" className="mx-auto">
-                        <Plus size={16} className="mr-2" /> Add First Block
-                      </Button>
-                    </div>
-                  ) : (
-                    <Reorder.Group axis="y" values={blocks} onReorder={setBlocks} className="space-y-4">
-                      {blocks.map((block, index) => (
-                        <Reorder.Item key={block.id || index} value={block}>
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="border border-gray-200 rounded-lg p-4 bg-gray-50 shadow-sm hover:shadow-md transition-shadow"
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className="cursor-grab active:cursor-grabbing pt-2">
-                                <GripVertical size={18} className="text-gray-400" />
-                              </div>
-                              <div className="flex-1 space-y-3">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs font-mono uppercase tracking-wider text-blue-600 font-semibold">
-                                    {block.type}
-                                  </span>
-                                  <button onClick={() => deleteBlock(index)} className="text-gray-400 hover:text-red-600 transition-colors">
-                                    <Trash2 size={16} />
-                                  </button>
+                  <div className="p-6">
+                    {blocks.length === 0 ? (
+                      <div className="text-center py-12 text-gray-500 font-body">
+                        <p className="mb-4">No content blocks yet.</p>
+                        <Button onClick={() => addBlock("paragraph")} variant="outline" className="mx-auto">
+                          <Plus size={16} className="mr-2" /> Add First Block
+                        </Button>
+                      </div>
+                    ) : (
+                      <Reorder.Group axis="y" values={blocks} onReorder={setBlocks} className="space-y-4">
+                        {blocks.map((block, index) => (
+                          <Reorder.Item key={block.id || index} value={block}>
+                            <motion.div
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="border border-gray-200 rounded-lg p-4 bg-gray-50 shadow-sm hover:shadow-md transition-shadow relative"
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="cursor-grab active:cursor-grabbing pt-2">
+                                  <GripVertical size={18} className="text-gray-400" />
                                 </div>
-
-                                {block.type === "paragraph" && (
-                                  <Textarea
-                                    value={block.content}
-                                    onChange={(e) => updateBlock(index, "content", e.target.value)}
-                                    placeholder="Write your paragraph..."
-                                    rows={4}
-                                    className="w-full"
-                                  />
-                                )}
-
-                                {block.type === "heading" && (
-                                  <div className="space-y-2">
-                                    <Input
-                                      value={block.content}
-                                      onChange={(e) => updateBlock(index, "content", e.target.value)}
-                                      placeholder="Heading text..."
-                                    />
-                                    <Select value={block.level?.toString() || "2"} onValueChange={(v) => updateBlock(index, "level", parseInt(v))}>
-                                      <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="2">H2</SelectItem>
-                                        <SelectItem value="3">H3</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                <div className="flex-1 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-mono uppercase tracking-wider text-blue-600 font-semibold">
+                                      {block.type}
+                                    </span>
+                                    <button onClick={() => deleteBlock(index)} className="text-gray-400 hover:text-red-600 transition-colors">
+                                      <Trash2 size={16} />
+                                    </button>
                                   </div>
-                                )}
 
-                                {block.type === "code" && (
-                                  <div className="space-y-2">
-                                    <Select value={block.language || "python"} onValueChange={(v) => updateBlock(index, "language", v)}>
-                                      <SelectTrigger><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="python">Python</SelectItem>
-                                        <SelectItem value="tcl">TCL</SelectItem>
-                                        <SelectItem value="bash">Bash</SelectItem>
-                                        <SelectItem value="verilog">Verilog</SelectItem>
-                                        <SelectItem value="systemverilog">SystemVerilog</SelectItem>
-                                        <SelectItem value="c">C</SelectItem>
-                                        <SelectItem value="vhdl">VHDL</SelectItem>
-                                        <SelectItem value="javascript">JavaScript</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <Textarea
-                                      value={block.content}
-                                      onChange={(e) => updateBlock(index, "content", e.target.value)}
-                                      placeholder="Paste code here..."
-                                      rows={8}
-                                      className="font-mono text-sm"
-                                    />
-                                  </div>
-                                )}
-
-                                {block.type === "image" && (
-                                  <div className="space-y-3">
-                                    <div className="flex items-center gap-4">
-                                        {block.url && (
-                                            <div className="w-32 h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0">
-                                                <img src={block.url} alt="Preview" className="w-full h-full object-cover" />
-                                            </div>
-                                        )}
-                                        <div className="flex-1">
-                                            <Input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={(e) => handleBlockImageChange(index, e)}
-                                                disabled={uploading}
-                                            />
-                                        </div>
+                                  {block.type === "paragraph" && (
+                                    <div className="space-y-2">
+                                      {/* NEW: Inline Code Format Button */}
+                                      <div className="flex justify-end">
+                                        <button 
+                                          onClick={() => formatInlineCode(index, block.id)}
+                                          className="text-xs flex items-center gap-1 bg-white border border-gray-200 px-2 py-1 rounded text-gray-600 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                                          title="Highlight text and click to format as code"
+                                        >
+                                          <Code2 size={12} /> Format Selection as Code
+                                        </button>
+                                      </div>
+                                      <Textarea
+                                        id={`textarea-${block.id}`}
+                                        value={block.content}
+                                        onChange={(e) => updateBlock(index, "content", e.target.value)}
+                                        onKeyDown={(e) => handleKeyDown(e, index, "content")}
+                                        placeholder="Write your paragraph... (Highlight text and click format above)"
+                                        rows={4}
+                                        className="w-full"
+                                      />
                                     </div>
-                                    <Input
-                                      value={block.caption}
-                                      onChange={(e) => updateBlock(index, "caption", e.target.value)}
-                                      placeholder="Image caption (optional)"
-                                    />
-                                    {/* Fallback URL input */}
-                                    <Input
-                                        value={block.url}
-                                        onChange={(e) => updateBlock(index, "url", e.target.value)}
-                                        placeholder="Or paste URL..."
-                                        className="text-xs opacity-60 focus:opacity-100"
-                                    />
-                                  </div>
-                                )}
+                                  )}
 
-                                {block.type === "youtube" && (
-                                  <div className="space-y-2">
-                                    <Input
-                                      value={block.url}
-                                      onChange={(e) => updateBlock(index, "url", e.target.value)}
-                                      placeholder="YouTube URL (https://youtube.com/...)"
-                                    />
-                                  </div>
-                                )}
+                                  {/* --- NEW: List Block --- */}
+                                  {block.type === "list" && (
+                                    <div className="space-y-2">
+                                      <Select value={block.listType || "ul"} onValueChange={(v) => updateBlock(index, "listType", v)}>
+                                        <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="ul">Bulleted List (•)</SelectItem>
+                                          <SelectItem value="ol">Numbered List (1.)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Textarea
+                                        value={block.content}
+                                        onChange={(e) => updateBlock(index, "content", e.target.value)}
+                                        onKeyDown={(e) => handleKeyDown(e, index, "content")}
+                                        placeholder="Enter items here. Each new line automatically becomes a new bullet point."
+                                        rows={5}
+                                        className="w-full"
+                                      />
+                                    </div>
+                                  )}
+
+                                  {block.type === "heading" && (
+                                    <div className="space-y-2">
+                                      <Input
+                                        value={block.content}
+                                        onChange={(e) => updateBlock(index, "content", e.target.value)}
+                                        placeholder="Heading text..."
+                                      />
+                                      <Select value={block.level?.toString() || "2"} onValueChange={(v) => updateBlock(index, "level", parseInt(v))}>
+                                        <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="2">H2</SelectItem>
+                                          <SelectItem value="3">H3</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )}
+
+                                  {block.type === "code" && (
+                                    <div className="space-y-2">
+                                      <Select value={block.language || "python"} onValueChange={(v) => updateBlock(index, "language", v)}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="python">Python</SelectItem>
+                                          <SelectItem value="tcl">TCL</SelectItem>
+                                          <SelectItem value="bash">Bash</SelectItem>
+                                          <SelectItem value="verilog">Verilog</SelectItem>
+                                          <SelectItem value="systemverilog">SystemVerilog</SelectItem>
+                                          <SelectItem value="c">C</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <Textarea
+                                        value={block.content}
+                                        onChange={(e) => updateBlock(index, "content", e.target.value)}
+                                        onKeyDown={(e) => handleKeyDown(e, index, "content")}
+                                        placeholder="Paste code here..."
+                                        rows={8}
+                                        className="font-mono text-sm"
+                                      />
+                                    </div>
+                                  )}
+
+                                  {block.type === "image" && (
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-4">
+                                          {block.url && (
+                                              <div className="w-32 h-20 bg-gray-100 rounded overflow-hidden flex-shrink-0">
+                                                  <img src={block.url} alt="Preview" className="w-full h-full object-cover" />
+                                              </div>
+                                          )}
+                                          <div className="flex-1">
+                                              <Input type="file" accept="image/*" onChange={(e) => handleBlockImageChange(index, e)} disabled={uploading} />
+                                          </div>
+                                      </div>
+                                      <Input value={block.caption} onChange={(e) => updateBlock(index, "caption", e.target.value)} placeholder="Image caption (optional)" />
+                                      <Input value={block.url} onChange={(e) => updateBlock(index, "url", e.target.value)} placeholder="Or paste URL..." className="text-xs opacity-60" />
+                                    </div>
+                                  )}
+
+                                  {block.type === "youtube" && (
+                                    <Input value={block.url} onChange={(e) => updateBlock(index, "url", e.target.value)} placeholder="YouTube URL (https://youtube.com/...)" />
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </motion.div>
-                        </Reorder.Item>
-                      ))}
-                    </Reorder.Group>
-                  )}
+                            </motion.div>
+                          </Reorder.Item>
+                        ))}
+                      </Reorder.Group>
+                    )}
+                  </div>
                 </Card>
               </>
             ) : (
@@ -545,64 +498,30 @@ export default function PostEditor() {
             )}
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-6">
             <Card className="p-6 bg-white shadow-sm border border-gray-200 sticky top-24">
               <h2 className="text-lg font-heading font-bold text-gray-900 mb-4">Publish Settings</h2>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="published" className="text-sm font-semibold text-gray-700">
-                    Published
-                  </Label>
-                  <Switch
-                    id="published"
-                    checked={published}
-                    onCheckedChange={setPublished}
-                    data-testid="post-published-switch"
-                  />
+                  <Label className="text-sm font-semibold text-gray-700">Published</Label>
+                  <Switch checked={published} onCheckedChange={setPublished} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="featured" className="text-sm font-semibold text-gray-700">
-                    Featured
-                  </Label>
-                  <Switch
-                    id="featured"
-                    checked={featured}
-                    onCheckedChange={setFeatured}
-                    data-testid="post-featured-switch"
-                  />
+                  <Label className="text-sm font-semibold text-gray-700">Featured</Label>
+                  <Switch checked={featured} onCheckedChange={setFeatured} />
                 </div>
               </div>
 
               <div className="mt-6 space-y-3">
-                <Button
-                  onClick={() => handleSave(published)}
-                  disabled={saving || uploading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-lg"
-                  data-testid="save-post-button"
-                >
+                <Button onClick={() => handleSave(published)} disabled={saving || uploading} className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:shadow-lg">
                   <Save size={16} className="mr-2" />
                   {uploading ? "Uploading..." : saving ? "Saving..." : isEdit ? "Update Post" : "Create Post"}
                 </Button>
                 {!published && (
-                  <Button
-                    onClick={() => handleSave(true)}
-                    disabled={saving || uploading}
-                    variant="outline"
-                    className="w-full"
-                    data-testid="publish-post-button"
-                  >
+                  <Button onClick={() => handleSave(true)} disabled={saving || uploading} variant="outline" className="w-full">
                     {saving ? "Publishing..." : "Save & Publish"}
                   </Button>
                 )}
-              </div>
-
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <div className="text-xs text-gray-600 font-mono space-y-1">
-                  <p>Blocks: {blocks.length}</p>
-                  <p>Category: {category}</p>
-                  <p>Tags: {tags.split(",").filter(Boolean).length}</p>
-                </div>
               </div>
             </Card>
           </div>

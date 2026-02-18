@@ -92,10 +92,13 @@ export default function BlockRenderer({ blocks }) {
         switch (block.type) {
           case "paragraph":
             return (
-              <p key={index} className="text-gray-700 leading-relaxed text-base font-body mb-4">
-                {block.content}
-              </p>
+              <p 
+                key={index} 
+                className="text-gray-700 leading-relaxed text-base font-body mb-4 whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ __html: block.content }}
+              />
             );
+            
           case "heading":
             if (block.level === 3) {
               return (
@@ -109,12 +112,29 @@ export default function BlockRenderer({ blocks }) {
                 {block.content}
               </h2>
             );
+            
+          case "list":
+            const ListTag = block.listType === 'ol' ? 'ol' : 'ul';
+            const listClass = block.listType === 'ol' ? 'list-decimal' : 'list-disc';
+            const items = (block.content || "").split('\n').filter(item => item.trim() !== '');
+            
+            return (
+              <ListTag key={index} className={`space-y-2 my-4 pl-6 ${listClass} text-gray-700 font-body marker:text-blue-600`}>
+                {items.map((item, i) => (
+                  <li key={i} dangerouslySetInnerHTML={{ __html: item }} />
+                ))}
+              </ListTag>
+            );
+            
           case "code":
             return <CodeBlock key={index} content={block.content} language={block.language} />;
+            
           case "image":
             return <ImageBlock key={index} url={block.url} caption={block.caption} />;
+            
           case "youtube":
             return <YouTubeBlock key={index} url={block.url} />;
+            
           default:
             return null;
         }
