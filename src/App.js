@@ -3,7 +3,7 @@ import React, { Suspense, lazy } from "react"; // Added imports
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Layout from "@/components/layout/Layout";
-import { Loader2 } from "lucide-react"; // Import Loader for fallback
+import { Loader2 } from "lucide-react";
 
 // Lazy Load Pages
 const Home = lazy(() => import("@/pages/Home"));
@@ -17,6 +17,7 @@ const AdminLogin = lazy(() => import("@/pages/admin/Login"));
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
 const PostEditor = lazy(() => import("@/pages/admin/PostEditor"));
 const PostManager = lazy(() => import("@/pages/admin/PostManager"));
+const SiteManager = lazy(() => import("@/pages/admin/SiteManager"));
 
 // Loading Spinner Component
 const PageLoader = () => (
@@ -45,6 +46,7 @@ function App() {
             <Route path="/admin/posts" element={<PostManager />} />
             <Route path="/admin/posts/new" element={<PostEditor />} />
             <Route path="/admin/posts/edit/:id" element={<PostEditor />} />
+            <Route path="/admin/settings" element={<SiteManager />} />
           </Routes>
         </Suspense>
       </BrowserRouter>

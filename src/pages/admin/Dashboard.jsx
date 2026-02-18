@@ -164,6 +164,13 @@ export default function AdminDashboard() {
             Manage Posts
           </Link>
           <Link
+            to="/admin/settings"
+            className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 rounded-lg font-semibold border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200"
+          >
+            <FileText size={18} />
+            Site Settings & Content
+          </Link>
+          <Link
             to="/"
             className="px-6 py-3 bg-white text-gray-700 rounded-lg font-semibold border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200"
           >
