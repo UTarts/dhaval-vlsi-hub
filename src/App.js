@@ -1,11 +1,10 @@
 import "@/App.css";
-import React, { Suspense, lazy } from "react"; // Added imports
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import React, { Suspense, lazy, useEffect } from "react"; 
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom"; 
 import { AuthProvider } from "@/contexts/AuthContext";
 import Layout from "@/components/layout/Layout";
 import { Loader2 } from "lucide-react";
 
-// Lazy Load Pages
 const Home = lazy(() => import("@/pages/Home"));
 const About = lazy(() => import("@/pages/About"));
 const Blog = lazy(() => import("@/pages/Blog"));
@@ -19,17 +18,29 @@ const PostEditor = lazy(() => import("@/pages/admin/PostEditor"));
 const PostManager = lazy(() => import("@/pages/admin/PostManager"));
 const SiteManager = lazy(() => import("@/pages/admin/SiteManager"));
 
-// Loading Spinner Component
+
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
     <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
   </div>
 );
 
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]); 
+
+  return null;
+}
+
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ScrollToTop /> 
+        
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Layout><Home /></Layout>} />
@@ -43,10 +54,10 @@ function App() {
             {/* Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/settings" element={<SiteManager />} />
             <Route path="/admin/posts" element={<PostManager />} />
             <Route path="/admin/posts/new" element={<PostEditor />} />
             <Route path="/admin/posts/edit/:id" element={<PostEditor />} />
-            <Route path="/admin/settings" element={<SiteManager />} />
           </Routes>
         </Suspense>
       </BrowserRouter>
