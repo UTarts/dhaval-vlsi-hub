@@ -54,15 +54,22 @@ export default function PostManager() {
     }
   };
 
+  // NEW: Logic to handle clicking the View (Eye) icon
+  const handleViewPost = (post) => {
+    if (post.published) {
+      // If published, open the public blog post in a new tab
+      window.open(`/blog/${post.slug}`, "_blank");
+    } else {
+      // If it's a draft, show an alert directing them to the editor preview
+      alert("This post is not published yet. Please click the 'Edit' icon next to it to view its preview.");
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/admin/login");
   };
 
-  // ... (Keep the rest of the Loading and Return JSX exactly the same as the original file. 
-  // Just ensure you don't use 'API' anywhere in the JSX, which the original didn't do anyway.)
-  // Below is the abridged return for clarity - REPLACE WITH FULL ORIGINAL JSX return logic
-  
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
@@ -212,15 +219,17 @@ export default function PostManager() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Link
-                            to={`/blog/${post.slug}`}
-                            target="_blank"
-                            className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
+                          
+                          {/* UPDATED: Changed from Link to button with logic */}
+                          <button
+                            onClick={() => handleViewPost(post)}
+                            className="p-2 text-gray-600 hover:text-blue-600 transition-colors cursor-pointer"
                             title="View Post"
                             data-testid={`view-post-${post.id}`}
                           >
                             <Eye size={16} />
-                          </Link>
+                          </button>
+
                           <Link
                             to={`/admin/posts/edit/${post.id}`}
                             className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
