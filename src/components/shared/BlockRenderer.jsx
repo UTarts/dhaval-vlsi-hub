@@ -90,11 +90,13 @@ export default function BlockRenderer({ blocks }) {
     <div className="prose-custom">
       {blocks.map((block, index) => {
         switch (block.type) {
+          
+          // --- UPDATED: Uses a div and ensures native HTML lists have correct Tailwind bullet styles ---
           case "paragraph":
             return (
-              <p 
+              <div 
                 key={index} 
-                className="text-gray-700 leading-relaxed text-base font-body mb-4 whitespace-pre-wrap"
+                className="text-gray-700 leading-relaxed text-base font-body mb-4 whitespace-pre-wrap [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_li]:mb-1"
                 dangerouslySetInnerHTML={{ __html: block.content }}
               />
             );
@@ -113,6 +115,7 @@ export default function BlockRenderer({ blocks }) {
               </h2>
             );
             
+          // Legacy list renderer (Kept in case old posts still use this type)
           case "list":
             const ListTag = block.listType === 'ol' ? 'ol' : 'ul';
             const listClass = block.listType === 'ol' ? 'list-decimal' : 'list-disc';

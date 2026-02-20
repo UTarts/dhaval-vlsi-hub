@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, Link, useLocation } from "react-router-dom"; 
 import { 
   ArrowLeft, Plus, Trash2, GripVertical, Image as ImageIcon, 
-  Code, Type, Heading2, Youtube, Save, Eye, LogOut, Upload, Loader2, List as ListIcon, Code2 
+  Code, Type, Heading2, Youtube, Save, Eye, LogOut, Loader2, List as ListIcon, ListOrdered, Code2 
 } from "lucide-react";
 import { motion, Reorder } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,6 +16,80 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import BlockRenderer from "@/components/shared/BlockRenderer";
 
+// --- NEW: WYSIWYG Rich Text Editor Component ---
+const RichTextEditor = ({ value, onChange }) => {
+  const editorRef = useRef(null);
+
+  // Initialize content exactly once to prevent cursor jumping
+  useEffect(() => {
+    if (editorRef.current && !editorRef.current.innerHTML && value) {
+      editorRef.current.innerHTML = value;
+    }
+  }, [value]);
+
+  const execCmd = (cmd, arg = null) => {
+    document.execCommand(cmd, false, arg);
+    editorRef.current.focus();
+    onChange(editorRef.current.innerHTML);
+  };
+
+  const handleCode = () => {
+    const selection = window.getSelection();
+    if (!selection.isCollapsed) {
+      const text = selection.toString();
+      // Wraps text in the exact Tailwind classes used on the frontend
+      const html = `<code class="bg-blue-50 text-blue-600 font-mono px-1.5 py-0.5 rounded text-sm border border-blue-100">${text}</code>`;
+      document.execCommand("insertHTML", false, html);
+    } else {
+      alert("Please highlight text first to format as inline code.");
+    }
+  };
+
+  // The custom arbitrary variants ([&_ul]...) force Tailwind to render lists properly inside the editor
+  const editorClasses = "w-full p-4 min-h-[150px] outline-none text-gray-700 font-body leading-relaxed whitespace-pre-wrap [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_li]:mb-1";
+
+  return (
+    <div className="border border-gray-300 rounded-lg overflow-hidden flex flex-col bg-white">
+      {/* MS-Word Style Toolbar */}
+      <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex gap-2 items-center">
+        <button type="button" onClick={() => execCmd("bold")} className="w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-gray-200 rounded transition-colors font-serif font-bold" title="Bold">
+          B
+        </button>
+        <button type="button" onClick={() => execCmd("italic")} className="w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-gray-200 rounded transition-colors font-serif italic" title="Italic">
+          I
+        </button>
+        <div className="w-px h-5 bg-gray-300 mx-1"></div>
+        <button type="button" onClick={() => execCmd("insertUnorderedList")} className="w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-gray-200 rounded transition-colors" title="Bullet List">
+          <ListIcon size={16} />
+        </button>
+        <button type="button" onClick={() => execCmd("insertOrderedList")} className="w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-gray-200 rounded transition-colors" title="Numbered List">
+          <ListOrdered size={16} />
+        </button>
+        <div className="w-px h-5 bg-gray-300 mx-1"></div>
+        <button type="button" onClick={handleCode} className="px-2 h-8 flex items-center gap-1 text-gray-700 hover:bg-gray-200 rounded transition-colors" title="Format Selection as Code">
+          <Code2 size={16} /> <span className="text-sm font-semibold">Code</span>
+        </button>
+      </div>
+      
+      {/* Editable Area */}
+      <div
+        ref={editorRef}
+        contentEditable
+        className={editorClasses}
+        onInput={(e) => onChange(e.currentTarget.innerHTML)}
+        onBlur={(e) => onChange(e.currentTarget.innerHTML)}
+        onKeyDown={(e) => {
+          if (e.key === 'Tab') {
+            e.preventDefault();
+            document.execCommand("insertHTML", false, "&nbsp;&nbsp;&nbsp;&nbsp;");
+          }
+        }}
+      />
+    </div>
+  );
+};
+// -----------------------------------------------
+
 export default function PostEditor() {
   const { id } = useParams();
   const isEdit = !!id;
@@ -27,7 +101,6 @@ export default function PostEditor() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // --- NEW: Read URL parameters to see if we should open in preview mode ---
   const [showPreview, setShowPreview] = useState(() => {
     return new URLSearchParams(location.search).get("preview") === "true";
   });
@@ -134,6 +207,7 @@ export default function PostEditor() {
     setBlocks(blocks.filter((_, i) => i !== index));
   };
 
+  // Used only for the raw code block textarea now
   const handleKeyDown = (e, index, field) => {
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -141,37 +215,11 @@ export default function PostEditor() {
       const end = e.target.selectionEnd;
       const value = e.target.value;
       const newValue = value.substring(0, start) + "    " + value.substring(end);
-      
       updateBlock(index, field, newValue);
-      
       setTimeout(() => {
         e.target.selectionStart = e.target.selectionEnd = start + 4;
       }, 0);
     }
-  };
-
-  const formatInlineCode = (index, blockId) => {
-    const el = document.getElementById(`textarea-${blockId}`);
-    if (!el) return;
-    
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    if (start === end) {
-      alert("Please highlight/select some text first to format it.");
-      return;
-    }
-
-    const value = el.value;
-    const selectedText = value.substring(start, end);
-    const codeWrapper = `<code class="bg-blue-50 text-blue-600 font-mono px-1.5 py-0.5 rounded text-sm border border-blue-100">${selectedText}</code>`;
-    const newValue = value.substring(0, start) + codeWrapper + value.substring(end);
-    
-    updateBlock(index, "content", newValue);
-    
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + codeWrapper.length, start + codeWrapper.length);
-    }, 0);
   };
 
   const createSlug = (text) => {
@@ -182,7 +230,8 @@ export default function PostEditor() {
     if (!title.trim()) { alert("Title is required"); return; }
     setSaving(true);
     try {
-      const textContent = blocks.map(b => b.content).join(" ");
+      // Strip HTML tags for word count estimation
+      const textContent = blocks.map(b => b.content.replace(/<[^>]+>/g, '')).join(" ");
       const wordCount = textContent.split(/\s+/).length;
       const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
@@ -317,16 +366,13 @@ export default function PostEditor() {
                     <h2 className="text-lg font-heading font-bold text-gray-900">Content Blocks</h2>
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={() => addBlock("paragraph")} className="text-xs bg-white">
-                        <Type size={14} className="mr-1" /> Para
+                        <Type size={14} className="mr-1" /> Rich Text
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => addBlock("heading")} className="text-xs bg-white">
                         <Heading2 size={14} className="mr-1" /> H2
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => addBlock("list")} className="text-xs bg-white">
-                        <ListIcon size={14} className="mr-1" /> List
-                      </Button>
                       <Button size="sm" variant="outline" onClick={() => addBlock("code")} className="text-xs bg-white">
-                        <Code size={14} className="mr-1" /> Code
+                        <Code size={14} className="mr-1" /> Code Block
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => addBlock("image")} className="text-xs bg-white">
                         <ImageIcon size={14} className="mr-1" /> Img
@@ -361,36 +407,22 @@ export default function PostEditor() {
                                 <div className="flex-1 space-y-3">
                                   <div className="flex items-center justify-between">
                                     <span className="text-xs font-mono uppercase tracking-wider text-blue-600 font-semibold">
-                                      {block.type}
+                                      {block.type === "paragraph" ? "Rich Text" : block.type}
                                     </span>
                                     <button onClick={() => deleteBlock(index)} className="text-gray-400 hover:text-red-600 transition-colors">
                                       <Trash2 size={16} />
                                     </button>
                                   </div>
 
+                                  {/* --- NEW: Rich Text Editor renders here --- */}
                                   {block.type === "paragraph" && (
-                                    <div className="space-y-2">
-                                      <div className="flex justify-end">
-                                        <button 
-                                          onClick={() => formatInlineCode(index, block.id)}
-                                          className="text-xs flex items-center gap-1 bg-white border border-gray-200 px-2 py-1 rounded text-gray-600 hover:text-blue-600 hover:border-blue-300 transition-colors"
-                                          title="Highlight text and click to format as code"
-                                        >
-                                          <Code2 size={12} /> Format Selection as Code
-                                        </button>
-                                      </div>
-                                      <Textarea
-                                        id={`textarea-${block.id}`}
-                                        value={block.content}
-                                        onChange={(e) => updateBlock(index, "content", e.target.value)}
-                                        onKeyDown={(e) => handleKeyDown(e, index, "content")}
-                                        placeholder="Write your paragraph... (Highlight text and click format above)"
-                                        rows={4}
-                                        className="w-full"
-                                      />
-                                    </div>
+                                    <RichTextEditor 
+                                      value={block.content} 
+                                      onChange={(newHtml) => updateBlock(index, "content", newHtml)} 
+                                    />
                                   )}
 
+                                  {/* Keep legacy list block for backwards compatibility */}
                                   {block.type === "list" && (
                                     <div className="space-y-2">
                                       <Select value={block.listType || "ul"} onValueChange={(v) => updateBlock(index, "listType", v)}>
@@ -404,7 +436,7 @@ export default function PostEditor() {
                                         value={block.content}
                                         onChange={(e) => updateBlock(index, "content", e.target.value)}
                                         onKeyDown={(e) => handleKeyDown(e, index, "content")}
-                                        placeholder="Enter items here. Each new line automatically becomes a new bullet point."
+                                        placeholder="Legacy list block. Prefer using Rich Text going forward."
                                         rows={5}
                                         className="w-full"
                                       />
