@@ -4,6 +4,7 @@ import { Clock, Eye, ArrowLeft, Calendar, Tag } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import BlockRenderer from "@/components/shared/BlockRenderer";
+import SEO from "@/components/shared/SEO";
 
 export default function BlogPost() {
   const { slug } = useParams();
