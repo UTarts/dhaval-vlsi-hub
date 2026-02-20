@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, Link, useLocation } from "react-router-dom"; 
 import { 
   ArrowLeft, Plus, Trash2, GripVertical, Image as ImageIcon, 
   Code, Type, Heading2, Youtube, Save, Eye, LogOut, Upload, Loader2, List as ListIcon, Code2 
@@ -20,12 +20,17 @@ export default function PostEditor() {
   const { id } = useParams();
   const isEdit = !!id;
   const navigate = useNavigate();
+  const location = useLocation(); 
   const { user, logout } = useAuth();
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+
+  // --- NEW: Read URL parameters to see if we should open in preview mode ---
+  const [showPreview, setShowPreview] = useState(() => {
+    return new URLSearchParams(location.search).get("preview") === "true";
+  });
 
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
@@ -112,7 +117,7 @@ export default function PostEditor() {
       content: "",
       language: type === "code" ? "python" : "",
       level: type === "heading" ? 2 : 2,
-      listType: type === "list" ? "ul" : "", // ul = bullet, ol = numbered
+      listType: type === "list" ? "ul" : "", 
       caption: "",
       url: "",
     };
@@ -129,7 +134,6 @@ export default function PostEditor() {
     setBlocks(blocks.filter((_, i) => i !== index));
   };
 
-  // --- NEW: Handle Tab Key for 4 Spaces ---
   const handleKeyDown = (e, index, field) => {
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -140,14 +144,12 @@ export default function PostEditor() {
       
       updateBlock(index, field, newValue);
       
-      // Move cursor right after the 4 inserted spaces
       setTimeout(() => {
         e.target.selectionStart = e.target.selectionEnd = start + 4;
       }, 0);
     }
   };
 
-  // --- NEW: Wrap selected text in inline code HTML ---
   const formatInlineCode = (index, blockId) => {
     const el = document.getElementById(`textarea-${blockId}`);
     if (!el) return;
@@ -161,7 +163,6 @@ export default function PostEditor() {
 
     const value = el.value;
     const selectedText = value.substring(start, end);
-    // Injects Tailwind styling directly into the content so it renders beautifully
     const codeWrapper = `<code class="bg-blue-50 text-blue-600 font-mono px-1.5 py-0.5 rounded text-sm border border-blue-100">${selectedText}</code>`;
     const newValue = value.substring(0, start) + codeWrapper + value.substring(end);
     
@@ -312,7 +313,6 @@ export default function PostEditor() {
                 {/* Content Blocks Card */}
                 <Card className="bg-white shadow-sm border border-gray-200 overflow-visible relative">
                   
-                  {/* --- NEW: Sticky Toolbar --- */}
                   <div className="sticky top-16 z-40 bg-gray-50 border-b border-gray-200 p-4 flex items-center justify-between rounded-t-xl shadow-sm">
                     <h2 className="text-lg font-heading font-bold text-gray-900">Content Blocks</h2>
                     <div className="flex flex-wrap gap-2">
@@ -370,7 +370,6 @@ export default function PostEditor() {
 
                                   {block.type === "paragraph" && (
                                     <div className="space-y-2">
-                                      {/* NEW: Inline Code Format Button */}
                                       <div className="flex justify-end">
                                         <button 
                                           onClick={() => formatInlineCode(index, block.id)}
@@ -392,7 +391,6 @@ export default function PostEditor() {
                                     </div>
                                   )}
 
-                                  {/* --- NEW: List Block --- */}
                                   {block.type === "list" && (
                                     <div className="space-y-2">
                                       <Select value={block.listType || "ul"} onValueChange={(v) => updateBlock(index, "listType", v)}>
