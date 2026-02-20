@@ -16,57 +16,136 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import BlockRenderer from "@/components/shared/BlockRenderer";
 
-// --- NEW: WYSIWYG Rich Text Editor Component ---
+// --- UPGRADED: WYSIWYG Rich Text Editor Component ---
 const RichTextEditor = ({ value, onChange }) => {
   const editorRef = useRef(null);
+  const [activeFormats, setActiveFormats] = useState({
+    bold: false, italic: false, ul: false, ol: false, code: false
+  });
 
-  // Initialize content exactly once to prevent cursor jumping
+  // Initialize content exactly once
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML && value) {
       editorRef.current.innerHTML = value;
     }
   }, [value]);
 
+  // Check which formatting is active at current cursor position
+  const checkFormatting = () => {
+    if (!editorRef.current) return;
+    
+    let isCode = false;
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0 && editorRef.current.contains(selection.anchorNode)) {
+      let node = selection.anchorNode;
+      while (node && node !== editorRef.current) {
+        if (node.nodeName === 'CODE') {
+          isCode = true;
+          break;
+        }
+        node = node.parentNode;
+      }
+    }
+
+    setActiveFormats({
+      bold: document.queryCommandState('bold'),
+      italic: document.queryCommandState('italic'),
+      ul: document.queryCommandState('insertUnorderedList'),
+      ol: document.queryCommandState('insertOrderedList'),
+      code: isCode
+    });
+  };
+
   const execCmd = (cmd, arg = null) => {
     document.execCommand(cmd, false, arg);
     editorRef.current.focus();
+    checkFormatting();
     onChange(editorRef.current.innerHTML);
   };
 
   const handleCode = () => {
     const selection = window.getSelection();
-    if (!selection.isCollapsed) {
-      const text = selection.toString();
-      // Wraps text in the exact Tailwind classes used on the frontend
-      const html = `<code class="bg-blue-50 text-blue-600 font-mono px-1.5 py-0.5 rounded text-sm border border-blue-100">${text}</code>`;
-      document.execCommand("insertHTML", false, html);
-    } else {
-      alert("Please highlight text first to format as inline code.");
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+
+    let currentNode = selection.anchorNode;
+    let codeNode = null;
+
+    // Check if we are inside a code tag
+    while (currentNode && currentNode !== editorRef.current) {
+      if (currentNode.nodeName === 'CODE') {
+        codeNode = currentNode;
+        break;
+      }
+      currentNode = currentNode.parentNode;
     }
+
+    if (codeNode) {
+      // WE ARE IN CODE: TURN IT OFF
+      if (selection.isCollapsed) {
+        // Cursor is just blinking, jump out of the code block
+        const space = document.createTextNode('\u200B'); // Zero-width space
+        codeNode.parentNode.insertBefore(space, codeNode.nextSibling);
+        range.setStartAfter(space);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        // Text is selected inside code block, unwrap it
+        const text = document.createTextNode(codeNode.textContent);
+        codeNode.parentNode.replaceChild(text, codeNode);
+        range.selectNodeContents(text);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    } else {
+      // WE ARE NOT IN CODE: TURN IT ON
+      if (!selection.isCollapsed) {
+        // Wrap selected text
+        const text = selection.toString();
+        const html = `<code class="bg-blue-50 text-blue-600 font-mono px-1.5 py-0.5 rounded text-sm border border-blue-100">${text}</code>`;
+        document.execCommand("insertHTML", false, html);
+      } else {
+        // Start an empty code block
+        const codeEl = document.createElement("code");
+        codeEl.className = "bg-blue-50 text-blue-600 font-mono px-1.5 py-0.5 rounded text-sm border border-blue-100";
+        codeEl.innerHTML = '\u200B'; // Zero-width space ensures it has height to type in
+        range.insertNode(codeEl);
+        range.selectNodeContents(codeEl);
+        range.collapse(false); // Move cursor inside
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+    
+    checkFormatting();
+    onChange(editorRef.current.innerHTML);
   };
 
-  // The custom arbitrary variants ([&_ul]...) force Tailwind to render lists properly inside the editor
   const editorClasses = "w-full p-4 min-h-[150px] outline-none text-gray-700 font-body leading-relaxed whitespace-pre-wrap [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-6 [&_ol]:pl-6 [&_li]:mb-1";
+
+  // Helper for dynamic button classes
+  const getBtnClass = (isActive) => `w-8 h-8 flex items-center justify-center rounded transition-colors ${isActive ? 'bg-blue-100 text-blue-700 shadow-inner' : 'text-gray-700 hover:bg-gray-200'}`;
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-hidden flex flex-col bg-white">
-      {/* MS-Word Style Toolbar */}
+      {/* Smart Toolbar */}
       <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex gap-2 items-center">
-        <button type="button" onClick={() => execCmd("bold")} className="w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-gray-200 rounded transition-colors font-serif font-bold" title="Bold">
+        <button type="button" onClick={() => execCmd("bold")} className={`${getBtnClass(activeFormats.bold)} font-serif font-bold`} title="Bold">
           B
         </button>
-        <button type="button" onClick={() => execCmd("italic")} className="w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-gray-200 rounded transition-colors font-serif italic" title="Italic">
+        <button type="button" onClick={() => execCmd("italic")} className={`${getBtnClass(activeFormats.italic)} font-serif italic`} title="Italic">
           I
         </button>
         <div className="w-px h-5 bg-gray-300 mx-1"></div>
-        <button type="button" onClick={() => execCmd("insertUnorderedList")} className="w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-gray-200 rounded transition-colors" title="Bullet List">
+        <button type="button" onClick={() => execCmd("insertUnorderedList")} className={getBtnClass(activeFormats.ul)} title="Bullet List">
           <ListIcon size={16} />
         </button>
-        <button type="button" onClick={() => execCmd("insertOrderedList")} className="w-8 h-8 flex items-center justify-center text-gray-700 hover:bg-gray-200 rounded transition-colors" title="Numbered List">
+        <button type="button" onClick={() => execCmd("insertOrderedList")} className={getBtnClass(activeFormats.ol)} title="Numbered List">
           <ListOrdered size={16} />
         </button>
         <div className="w-px h-5 bg-gray-300 mx-1"></div>
-        <button type="button" onClick={handleCode} className="px-2 h-8 flex items-center gap-1 text-gray-700 hover:bg-gray-200 rounded transition-colors" title="Format Selection as Code">
+        <button type="button" onClick={handleCode} className={`px-2 h-8 flex items-center gap-1 rounded transition-colors ${activeFormats.code ? 'bg-blue-100 text-blue-700 shadow-inner' : 'text-gray-700 hover:bg-gray-200'}`} title="Toggle Code Formatting">
           <Code2 size={16} /> <span className="text-sm font-semibold">Code</span>
         </button>
       </div>
@@ -76,8 +155,10 @@ const RichTextEditor = ({ value, onChange }) => {
         ref={editorRef}
         contentEditable
         className={editorClasses}
-        onInput={(e) => onChange(e.currentTarget.innerHTML)}
-        onBlur={(e) => onChange(e.currentTarget.innerHTML)}
+        onInput={(e) => { checkFormatting(); onChange(e.currentTarget.innerHTML); }}
+        onKeyUp={checkFormatting}
+        onMouseUp={checkFormatting}
+        onFocus={checkFormatting}
         onKeyDown={(e) => {
           if (e.key === 'Tab') {
             e.preventDefault();
@@ -207,7 +288,6 @@ export default function PostEditor() {
     setBlocks(blocks.filter((_, i) => i !== index));
   };
 
-  // Used only for the raw code block textarea now
   const handleKeyDown = (e, index, field) => {
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -215,7 +295,9 @@ export default function PostEditor() {
       const end = e.target.selectionEnd;
       const value = e.target.value;
       const newValue = value.substring(0, start) + "    " + value.substring(end);
+      
       updateBlock(index, field, newValue);
+      
       setTimeout(() => {
         e.target.selectionStart = e.target.selectionEnd = start + 4;
       }, 0);
@@ -414,7 +496,7 @@ export default function PostEditor() {
                                     </button>
                                   </div>
 
-                                  {/* --- NEW: Rich Text Editor renders here --- */}
+                                  {/* --- Rich Text Editor replaces raw paragraph --- */}
                                   {block.type === "paragraph" && (
                                     <RichTextEditor 
                                       value={block.content} 
@@ -422,7 +504,7 @@ export default function PostEditor() {
                                     />
                                   )}
 
-                                  {/* Keep legacy list block for backwards compatibility */}
+                                  {/* Legacy list block kept for older post compatibility */}
                                   {block.type === "list" && (
                                     <div className="space-y-2">
                                       <Select value={block.listType || "ul"} onValueChange={(v) => updateBlock(index, "listType", v)}>
